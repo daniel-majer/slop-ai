@@ -1,11 +1,40 @@
 import { readFile } from "node:fs/promises";
 
-import { Controller, Get } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+} from "@nestjs/common";
+import { ApiNoContentResponse } from "@nestjs/swagger";
 
 import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
+import { envelope } from "../src/common/transform-response.interceptor.js";
+import {
+  CreateSampleDto,
+  SampleDto,
+  SamplePageMetaDto,
+  UpdateSampleDto,
+} from "./fixtures/sample.dto.js";
 import { useTestApp } from "./setup.js";
 
 const ERROR_REF = "#/components/schemas/ErrorEnvelopeDto";
+
+// Routes and models that exist only for these assertions.
+const TEST_PATHS = new Set(["/api/boom", "/api/sample", "/api/sample/{id}"]);
+const TEST_SCHEMAS = new Set([
+  "CreateSampleDto",
+  "UpdateSampleDto",
+  "SampleDto",
+  "SamplePageMetaDto",
+]);
 
 @Controller("boom")
 class BoomController {
@@ -13,6 +42,53 @@ class BoomController {
   @ApiDataResponse({ type: "object" }, { nullable: true })
   boom() {
     throw new Error("unexpected");
+  }
+}
+
+/** In-memory resource covering list, read, create and delete documentation. */
+@Controller("sample")
+class SampleController {
+  private readonly rows = new Map<number, SampleDto>();
+  private nextId = 1;
+
+  @Get()
+  @ApiDataResponse(SampleDto, { isArray: true, meta: SamplePageMetaDto })
+  list() {
+    const data = [...this.rows.values()];
+    return envelope(data, { nextCursor: null, hasNextPage: false });
+  }
+
+  @Get(":id")
+  @ApiDataResponse(SampleDto)
+  findOne(@Param("id", ParseIntPipe) id: number) {
+    const row = this.rows.get(id);
+    if (!row) throw new NotFoundException(`Sample ${id} not found`);
+    return row;
+  }
+
+  @Post()
+  @ApiDataResponse(SampleDto)
+  create(@Body() dto: CreateSampleDto) {
+    const row: SampleDto = { id: this.nextId++, email: dto.email };
+    this.rows.set(row.id, row);
+    return row;
+  }
+
+  @Patch(":id")
+  @ApiDataResponse(SampleDto)
+  update(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateSampleDto) {
+    const row = this.rows.get(id);
+    if (!row) throw new NotFoundException(`Sample ${id} not found`);
+    const updated: SampleDto = { id: row.id, email: dto.email ?? row.email };
+    this.rows.set(id, updated);
+    return updated;
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: "Deleted." })
+  remove(@Param("id", ParseIntPipe) id: number) {
+    this.rows.delete(id);
   }
 }
 
@@ -58,7 +134,7 @@ const schemaOf = (doc: Spec, path: string, method: string, status: string) =>
     ?.schema;
 
 describe("OpenAPI document (e2e)", () => {
-  const t = useTestApp({ controllers: [BoomController] });
+  const t = useTestApp({ controllers: [BoomController, SampleController] });
 
   const spec = async (): Promise<Spec> => {
     const res = await t.app.inject({ method: "GET", url: "/api/docs-json" });
@@ -70,7 +146,7 @@ describe("OpenAPI document (e2e)", () => {
     const doc = await spec();
 
     expect(doc.openapi).toMatch(/^3\./);
-    expect(Object.keys(doc.paths)).toContain("/api/users");
+    expect(Object.keys(doc.paths)).toContain("/api/health/ready");
   });
 
   it("matches the committed openapi.json", async () => {
@@ -79,18 +155,28 @@ describe("OpenAPI document (e2e)", () => {
       await readFile(new URL("../openapi.json", import.meta.url), "utf8"),
     );
 
-    // Compare the full contract, excluding the test-only route. Update with bun run api:sync.
+    // Compare the full contract, excluding test-only routes and models.
+    // Update with bun run api:sync.
     const paths = Object.fromEntries(
-      Object.entries(doc.paths).filter(([path]) => path !== "/api/boom"),
+      Object.entries(doc.paths).filter(([path]) => !TEST_PATHS.has(path)),
+    );
+    const schemas = Object.fromEntries(
+      Object.entries(doc.components.schemas).filter(
+        ([name]) => !TEST_SCHEMAS.has(name),
+      ),
     );
 
-    expect({ ...doc, paths }).toEqual(committed);
+    expect({
+      ...doc,
+      paths,
+      components: { ...doc.components, schemas },
+    }).toEqual(committed);
   });
 
   it("derives validation constraints from DTO validators, including mapped types", async () => {
     const doc = await spec();
-    const create = doc.components.schemas.CreateUserDto;
-    const update = doc.components.schemas.UpdateUserDto;
+    const create = doc.components.schemas.CreateSampleDto;
+    const update = doc.components.schemas.UpdateSampleDto;
 
     expect(create?.properties?.email).toMatchObject({
       type: "string",
@@ -106,18 +192,18 @@ describe("OpenAPI document (e2e)", () => {
     it("documents a list as an array inside the data envelope", async () => {
       const doc = await spec();
 
-      expect(schemaOf(doc, "/api/users", "get", "200")).toEqual({
+      expect(schemaOf(doc, "/api/sample", "get", "200")).toEqual({
         type: "object",
         required: ["data", "meta"],
         properties: {
           data: {
             type: "array",
-            items: { $ref: "#/components/schemas/UserDto" },
+            items: { $ref: "#/components/schemas/SampleDto" },
           },
-          meta: { $ref: "#/components/schemas/UsersPageMetaDto" },
+          meta: { $ref: "#/components/schemas/SamplePageMetaDto" },
         },
       });
-      expect(doc.components.schemas.UsersPageMetaDto).toMatchObject({
+      expect(doc.components.schemas.SamplePageMetaDto).toMatchObject({
         required: ["nextCursor", "hasNextPage"],
         properties: {
           nextCursor: { type: "integer", nullable: true },
@@ -128,7 +214,7 @@ describe("OpenAPI document (e2e)", () => {
 
     it("documents no meta on a route that never sends one", async () => {
       const doc = await spec();
-      const schema = schemaOf(doc, "/api/users/{id}", "get", "200");
+      const schema = schemaOf(doc, "/api/sample/{id}", "get", "200");
 
       // Metadata must be explicitly enabled with { meta: true }.
       expect(properties(schema)).toEqual(["data"]);
@@ -137,18 +223,18 @@ describe("OpenAPI document (e2e)", () => {
     it("documents create as 201, not 200", async () => {
       const doc = await spec();
 
-      expect(doc.paths["/api/users"]?.post?.responses["200"]).toBeUndefined();
-      expect(schemaOf(doc, "/api/users", "post", "201")).toBeDefined();
+      expect(doc.paths["/api/sample"]?.post?.responses["200"]).toBeUndefined();
+      expect(schemaOf(doc, "/api/sample", "post", "201")).toBeDefined();
     });
 
     it("matches the envelope the interceptor really sends", async () => {
       await t.app.inject({
         method: "POST",
-        url: "/api/users",
+        url: "/api/sample",
         payload: { email: "ada@example.com" },
       });
 
-      const res = await t.app.inject({ method: "GET", url: "/api/users" });
+      const res = await t.app.inject({ method: "GET", url: "/api/sample" });
 
       expect(Object.keys(res.json())).toEqual(["data", "meta"]);
       expect(Array.isArray(res.json().data)).toBe(true);
@@ -171,23 +257,23 @@ describe("OpenAPI document (e2e)", () => {
 
     it("needs no per-status decorator on a route that can 404", async () => {
       const doc = await spec();
-      const findOne = doc.paths["/api/users/{id}"]?.get;
+      const findOne = doc.paths["/api/sample/{id}"]?.get;
 
       expect(Object.keys(findOne?.responses ?? {})).toEqual(["200", "default"]);
     });
 
     it("matches what AllExceptionsFilter really sends", async () => {
       const doc = await spec();
-      const envelope = doc.components.schemas.ErrorEnvelopeDto ?? {};
+      const envelopeSchema = doc.components.schemas.ErrorEnvelopeDto ?? {};
       const error = doc.components.schemas.ApiErrorDto ?? {};
 
-      const res = await t.app.inject({ method: "GET", url: "/api/users/999" });
+      const res = await t.app.inject({ method: "GET", url: "/api/sample/999" });
       const body = res.json();
 
       expect(res.statusCode).toBe(404);
       // All required fields must be present.
       expect(Object.keys(body)).toEqual(
-        expect.arrayContaining(envelope.required ?? []),
+        expect.arrayContaining(envelopeSchema.required ?? []),
       );
       expect(Object.keys(body.error)).toEqual(
         expect.arrayContaining(error.required ?? []),
@@ -204,7 +290,7 @@ describe("OpenAPI document (e2e)", () => {
 
       const res = await t.app.inject({
         method: "POST",
-        url: "/api/users",
+        url: "/api/sample",
         payload: { email: "not-an-email" },
       });
 
@@ -235,19 +321,19 @@ describe("OpenAPI document (e2e)", () => {
       const doc = await spec();
       const created = await t.app.inject({
         method: "POST",
-        url: "/api/users",
+        url: "/api/sample",
         payload: { email: "ada@example.com" },
       });
 
       const res = await t.app.inject({
         method: "DELETE",
-        url: `/api/users/${created.json().data.id}`,
+        url: `/api/sample/${created.json().data.id}`,
       });
 
       expect(res.statusCode).toBe(204);
       expect(res.payload).toBe("");
       expect(
-        doc.paths["/api/users/{id}"]?.delete?.responses["204"]?.content,
+        doc.paths["/api/sample/{id}"]?.delete?.responses["204"]?.content,
       ).toBeUndefined();
     });
   });

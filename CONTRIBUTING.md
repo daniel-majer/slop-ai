@@ -1,15 +1,13 @@
 # Contributing
 
-<!-- TODO(template): Rewrite contribution intro. -->
-
-Keep the template small and reusable. Bug fixes, reproducibility improvements
-and focused examples are welcome; discuss new infrastructure or product-specific
-features in an issue before implementing them. Use [SECURITY.md](SECURITY.md)
-for vulnerabilities, not a public issue.
+Thanks for helping with slop-ai. Bug fixes and focused improvements are
+welcome; open an issue to discuss a larger feature before implementing it, so
+we can agree on the shape first. Use [SECURITY.md](SECURITY.md) for
+vulnerabilities, not a public issue.
 
 ## Local setup
 
-Use Node 22 (`.nvmrc`), Bun 1.3.14 (`packageManager`) and Docker with Compose v2.
+Use Node 22 (`.nvmrc`), Bun 1.4.2 (`packageManager`) and Docker with Compose v2.
 Run these commands from the repository root:
 
 ```sh
@@ -40,7 +38,7 @@ bun run verify:images
 ```
 
 The last command builds all three production images and exercises their isolated
-Compose stack, API CRUD, server-rendered HTML and dependency outages. It
+Compose stack, CORS, server-rendered HTML and dependency outages. It
 removes only its own containers, volumes and image tags, including after a
 failure, and prints container logs to help diagnose a failed run.
 

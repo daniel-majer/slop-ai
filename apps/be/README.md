@@ -10,7 +10,6 @@ Requires Docker (Postgres and Redis run in containers, see `docker-compose.yml`)
 bun install          # also runs `prisma generate`
 cp .env.example .env
 bun run dev          # starts postgres + redis, applies migrations, watch mode
-bun run db:seed      # optional: two sample users
 ```
 
 `dev` chains `docker:up`, `db:deploy` and `nest start --watch`, so a fresh clone
@@ -19,9 +18,9 @@ a migration after editing `schema.prisma`.
 
 `.env.test` is committed and used by the test scripts; it points at a separate
 Docker stack (`docker-compose.test.yml`, ports 5434 / 6380) so tests never touch
-your dev data. Both stacks publish only on `127.0.0.1`. Change the
-`name:` values marked `TODO(template)` in both Compose files after cloning; each
-checkout on the same Docker host must use a different pair of names.
+your dev data. Both stacks publish only on `127.0.0.1`. The Compose project
+names (`slop-ai-be`, `slop-ai-be-test`) must stay unique per Docker host, so give
+a second checkout on the same host a different pair.
 
 ## Scripts
 
@@ -44,7 +43,7 @@ bun run db:generate  # regenerate the prisma client (postinstall does it too)
 bun run db:migrate   # create/apply a migration in dev (prisma migrate dev)
 bun run db:deploy    # apply migrations in prod/CI (prisma migrate deploy)
 bun run db:migrate:test  # apply migrations to the test database
-bun run db:seed      # insert the sample rows (src/database/seed.ts)
+bun run db:seed      # run the seed script (src/database/seed.ts)
 bun run db:studio    # browse the database
 bun run api:spec     # rebuild openapi.json from the controllers
 ```
@@ -55,8 +54,8 @@ bun run api:spec     # rebuild openapi.json from the controllers
 
 Every controller route is served under **`/api`**, Swagger included. It is what
 lets the api and the frontend share one origin: a reverse proxy forwards
-`/api/*` here unchanged and everything else to Next, and a page route such as
-the frontend's `/users` cannot shadow the endpoint of the same name.
+`/api/*` here unchanged and everything else to Next, so a frontend page route
+cannot shadow an API endpoint of the same name.
 
 The prefix is applied twice, and the two must agree: `configureApp()` sets it
 for the server and the e2e suite, and `scripts/generate-openapi.ts` sets it for
@@ -185,14 +184,14 @@ Every response is an envelope, success and failure alike:
 ```jsonc
 { "data": { "id": 1 } }                       // success
 { "data": [ ... ], "meta": { "nextCursor": 20, "hasNextPage": true } }
-{ "data": null, "error": { "statusCode": 404, "message": "User 42 not found",
-                           "timestamp": "...", "path": "/api/users/42",
+{ "data": null, "error": { "statusCode": 404, "message": "Resource 42 not found",
+                           "timestamp": "...", "path": "/api/resource/42",
                            "requestId": "..." } }
 ```
 
 - **`TransformResponseInterceptor`** (`APP_INTERCEPTOR`) wraps every handler
   result as `{ data }`. To send metadata beside the payload, return
-  `envelope(users, { nextCursor, hasNextPage })` — a hand-written `{ data: ... }` is deliberately
+  `envelope(rows, { nextCursor, hasNextPage })` — a hand-written `{ data: ... }` is deliberately
   not recognised (it would be indistinguishable from a row with a `data`
   column) and ends up nested inside a second envelope.
 - A handler that returns `null` or nothing answers `{ data: null }`; document
@@ -265,8 +264,8 @@ injection.
 - Errors need no decorator - `swagger.setup.ts` attaches the error envelope as
   the `default` response of every operation.
 - `operationIdFactory` names each operation `<controller><Method>`, so
-  `UsersController.findAll` becomes `usersFindAll` and the generated hook
-  `useUsersFindAll`. Without it a second controller with a `findAll` would
+  `HealthController.ready` becomes `healthReady` and the generated hook
+  `useHealthReady`. Without it a second controller with a `ready` would
   collide in the generated client.
 - After changing a controller or a DTO, run `bun run api:sync` from the repo
   root: it regenerates the spec and the client in one step.

@@ -1,9 +1,9 @@
-# Turborepo
+# slop-ai
 
-> **TODO(template):** Complete the “Make it yours” checklist after cloning.
+An AI app builder. Describe a web app in plain language and watch it get built, previewed and shipped.
 
-Turborepo monorepo template with a Next.js frontend and a NestJS backend, sharing
-UI components, TypeScript configs and tooling.
+Turborepo monorepo with a Next.js frontend and a NestJS backend, sharing UI
+components, TypeScript configs and tooling.
 
 ## Stack
 
@@ -37,14 +37,12 @@ bun install                      # also generates the Prisma client and the API 
 bun run setup                    # copies every .env.example that does not exist yet
 bun run dev                      # starts Postgres + Redis, applies migrations, then both apps
                                  # fe → http://localhost:3000, be → http://localhost:3001
-bun run --cwd apps/be db:seed    # optional: two sample users
 ```
 
-`http://localhost:3000/users` is a working end-to-end example: a page that
-lists, creates and deletes users through a client generated from the backend's
-OpenAPI spec. `http://localhost:3001/api/docs` is the Swagger UI for the same
+`http://localhost:3001/api/docs` is the Swagger UI for the backend's OpenAPI
 spec, and `http://localhost:3001/api/health/ready` says whether Postgres and
-Redis are reachable.
+Redis are reachable. The typed client in `@repo/api-client` is generated from
+that spec.
 
 Use Node 22 (`.nvmrc`, CI and both Docker build/runtime stages) and bun 1.4.2
 (`packageManager`). The minimum supported Node version is 22.12.0.
@@ -53,77 +51,26 @@ when upgrading Prisma or Orval rather than removing them blindly. Bun 1.4.2
 supports the version-scoped overrides that patch `js-yaml` 4.x while preserving
 Swagger's 5.x dependency. The resulting lockfile cannot be read by Bun 1.3.14.
 
-## Make it yours
-
-After cloning, resolve the `TODO(template)` markers for your project and
-deployment, then remove the resolved comments. They mark sample content and
-project-specific setup; guidance for optional extensions uses ordinary comments.
-Find the markers, including those in `.env` examples and GitHub workflows, with:
-
-```sh
-rg --hidden --line-number --fixed-strings 'TODO(template)' --glob '!.git' .
-```
-
-Files that cannot contain comments are called out below.
-
-- **`apps/fe/.env`** — create it from the example (`cp apps/fe/.env.example apps/fe/.env`).
-  Without it the build fails immediately: `src/env.ts` validates both public
-  URLs. For production, set their real values and the repository variables used
-  by `.github/workflows/release.yml`. CI can keep its local test URLs.
-- **`apps/fe/src/app/layout.tsx`** — replace the template `title` and `description`
-  metadata, and change `lang="en"` if the app is in another language.
-- **Root `package.json`** — rename `"turborepo-template"` to your project (JSON
-  does not support an inline TODO comment).
-- **README files** — replace template introductions with your project description.
-  Update app-specific documentation as its behavior changes.
-- **`LICENSE`** — the template is MIT-0, so you can delete or replace it freely;
-  pick whatever license fits your project, update the holder/year for your own
-  code, and align the `license` field in `packages/ts-config/package.json`.
-- **`apps/be`** — a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
-  env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
-  and a catch-all exception filter. Postgres and Redis run via Docker; the quick
-  start above creates the backend env, starts both services, and applies the
-  Prisma migrations before `bun run dev` — see `apps/be/README.md`.
-- **Frontend only?** The backend is not optional by accident — `apps/fe` imports
-  `@repo/api-client`, which is generated from `apps/be/openapi.json`. To drop it,
-  delete `apps/be` **and** `packages/api-client`, remove `@repo/api-client` from
-  `apps/fe/package.json`, delete `apps/fe/src/app/users/`, drop
-  `NEXT_PUBLIC_API_URL` / `API_URL` from `apps/fe/src/env.ts` and `.env.example`,
-  and remove the `api:sync` script here. Then `bun install`.
-- **Optional branding** — the default fonts and palettes can stay. If you change
-  the fonts in `layout.tsx`, keep `apps/fe/src/app/globals.css` aligned. Shared
-  palettes live in `packages/ui/src/styles/globals.css`; public assets and crawling
-  rules live in `apps/fe/public/`.
-- **Sample domain** — replace the Prisma `User` model, seed data, backend
-  `users/` module, cached hello endpoint and frontend `src/app/users/` example.
-  Add authentication and authorization before handling real data, including
-  passing the visitor's credentials to server-side API calls. Update the sample
-  tests and `scripts/verify-images.mjs`, then run `bun run api:sync`.
-- **Project policies** — adapt the template-specific wording in `CONTRIBUTING.md`,
-  `SECURITY.md` and the GitHub issue forms. Enable private vulnerability reporting
-  and Renovate in the new repository.
-- **CI** — `ci.yml` runs four parallel jobs (checks, unit tests, API e2e tests,
-  production-image smoke) on pull requests, and again as the first job of every
-  release; adjust for your
-  branching model. Shared setup lives in `.github/actions/setup`. For Vercel
-  Remote Cache, add `TURBO_TOKEN` as a GitHub Actions repository secret and
-  `TURBO_TEAM` as a repository variable. The workflow exposes both to Turbo;
-  without them, the built-in `.turbo` cache via `actions/cache` still works.
-- **Deployment** — `apps/*/Dockerfile`, `docker-compose.prod.yml`,
-  `.env.production.example` and `.github/workflows/release.yml` ship the apps as
-  API, frontend and migration images, see [Deployment](#deployment). After
-  cloning, the `name:` in `docker-compose.prod.yml` must be unique per host, and the
-  `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_API_URL` repository variables feed the
-  frontend image's build args. GitHub does not copy variables to repositories
-  created from a template, so set them before the first push to `main`. This
-  template repository itself uses the CI's localhost placeholders, so its
-  published images only suit a local run. If you add workspaces, update the
-  Dockerfile `COPY` lists to include their manifests and required sources.
+## Project layout notes
 
 The tooling defaults work as shipped. When adding server environment variables,
 update `turbo.json`; when adding or renaming packages, review the Dockerfiles,
 release image lists and `commitlint` scopes. The tsconfig presets and
 `components.json` need no changes unless you customize their conventions.
+
+`apps/be` is a NestJS app on Fastify (ESM + vitest, port 3001) with zod-validated
+env, Prisma + Postgres, a Redis cache, pino logging, a global `ValidationPipe`
+and a catch-all exception filter — see `apps/be/README.md`. The schema has no
+models yet: add the first one, create a migration with
+`bun run --cwd apps/be db:migrate`, then run `bun run api:sync` so the spec and
+the generated client follow.
+
+Deployment ships three images (API, frontend, migrations) through
+`.github/workflows/release.yml`; `docker-compose.prod.yml` and
+`.env.production.example` describe the server side. The `NEXT_PUBLIC_APP_URL`
+and `NEXT_PUBLIC_API_URL` repository variables feed the frontend image's build
+args and must be set before the first push to `main`. If you add workspaces,
+update the Dockerfile `COPY` lists to include their manifests and sources.
 
 ## Commands
 
@@ -277,8 +224,8 @@ pieces of wiring are what make it hold:
 Every backend route lives under **`/api`** (`apps/be/src/api-prefix.ts`),
 including Swagger. That is what lets both apps share one origin: a reverse
 proxy forwards `/api/*` to the backend as-is - no path rewriting - and
-everything else to the frontend, and a page route such as `/users` can never
-shadow the endpoint of the same name.
+everything else to the frontend, so a frontend page route can never shadow an
+API endpoint of the same name.
 
 Two environment variables connect the two sides, and they must agree:
 `CORS_ORIGINS` in `apps/be/.env` lists the origins CORS lets in (comma
@@ -480,10 +427,11 @@ default branch with required CI checks. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for the contribution workflow, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for
 community expectations and [SECURITY.md](SECURITY.md) for private reports.
 
-The `/users` example is deliberately unauthenticated. A real application still
-needs its own authentication/authorization, abuse controls, TLS, backups and
-monitoring before handling real user data. The Docker setup and tests verify
-the template's infrastructure; they do not supply those product-level decisions.
+The API currently exposes only health endpoints and is unauthenticated. Add
+authentication and authorization together with the first endpoint that touches
+real data, along with abuse controls, TLS, backups and monitoring. The Docker
+setup and tests verify infrastructure; they do not supply those product-level
+decisions.
 
 ## License
 

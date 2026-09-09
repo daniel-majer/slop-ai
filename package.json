@@ -1,6 +1,8 @@
 {
-  "name": "turborepo-template",
+  "name": "slop-ai",
   "private": true,
+  "description": "An AI app builder. Describe a web app in plain language and watch it get built, previewed and shipped.",
+  "license": "MIT",
   "workspaces": [
     "apps/*",
     "packages/*"

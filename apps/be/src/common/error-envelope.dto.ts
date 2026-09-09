@@ -5,7 +5,7 @@ class ApiErrorDto {
   @ApiProperty({ type: "integer", example: 404 })
   statusCode: number;
 
-  @ApiProperty({ example: "User 42 not found" })
+  @ApiProperty({ example: "Resource 42 not found" })
   message: string;
 
   @ApiPropertyOptional({
@@ -20,7 +20,7 @@ class ApiErrorDto {
 
   @ApiProperty({
     description: "The request path that failed.",
-    example: "/api/users/42",
+    example: "/api/resource/42",
   })
   path: string;
 

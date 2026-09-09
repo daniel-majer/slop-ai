@@ -1,5 +1,4 @@
-# TODO(template): Change this project name so it is unique on your Docker host.
-name: turborepo-template-be
+name: slop-ai-be
 
 services:
   postgres:

@@ -1,6 +1,5 @@
-# TODO(template): Replace template wording.
 name: Feature request
-description: Suggest a reusable improvement to the template.
+description: Suggest an improvement to slop-ai.
 title: "feat: "
 labels: [enhancement]
 body:

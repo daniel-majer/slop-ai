@@ -21,17 +21,15 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   // Makes relative URLs in Open Graph and canonical tags absolute.
   metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
-  // TODO(template): Set product metadata.
   title: {
-    default: "Turborepo Template",
-    template: "%s | Turborepo Template",
+    default: "slop-ai",
+    template: "%s | slop-ai",
   },
   description:
-    "A Next.js frontend and a NestJS backend in one repository, with shared UI, types and configuration.",
+    "Describe a web app in plain language and watch it get built, previewed and shipped.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  // TODO(template): Change the document language if your application is not English.
   return (
     <html
       lang="en"

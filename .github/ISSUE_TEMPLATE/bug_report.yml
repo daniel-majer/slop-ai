@@ -1,6 +1,5 @@
-# TODO(template): Replace template wording.
 name: Bug report
-description: Report a reproducible problem in the template.
+description: Report a reproducible problem in slop-ai.
 title: "fix: "
 labels: [bug]
 body:

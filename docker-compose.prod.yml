@@ -1,6 +1,5 @@
 # Production setup: README.md and .env.production.example.
-# TODO(template): choose a unique project name to isolate volumes.
-name: turborepo-template-prod
+name: slop-ai-prod
 
 # Pin all release images to the same immutable run tag.
 x-images:

@@ -1,6 +1,7 @@
-import { Controller, Get, NotFoundException } from "@nestjs/common";
+import { Body, Controller, Get, NotFoundException, Post } from "@nestjs/common";
 
 import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
+import { CreateSampleDto } from "./fixtures/sample.dto.js";
 import { useTestApp } from "./setup.js";
 
 @Controller("boom")
@@ -15,6 +16,12 @@ class BoomController {
   @ApiDataResponse({ type: "object" }, { nullable: true })
   unknownError() {
     throw new Error("db exploded: password=secret");
+  }
+
+  @Post("validated")
+  @ApiDataResponse(CreateSampleDto)
+  validated(@Body() dto: CreateSampleDto) {
+    return dto;
   }
 }
 
@@ -53,7 +60,7 @@ describe("AllExceptionsFilter (e2e)", () => {
   it("collects validation failures into details", async () => {
     const res = await t.app.inject({
       method: "POST",
-      url: "/api/users",
+      url: "/api/boom/validated",
       payload: { email: "not-an-email" },
     });
     const body = res.json();

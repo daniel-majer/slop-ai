@@ -16,12 +16,12 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
   // Must run before the explorer reads the metadata.
   applyDataResponses();
 
-  // TODO(template): Set API metadata.
   // Regenerate openapi.json and the client with bun run api:sync afterwards.
   const config = new DocumentBuilder()
-    .setTitle("API")
+    .setTitle("slop-ai API")
     .setDescription(
-      "Every response is an envelope: `{ data }`, or `{ data: null, error }`.",
+      "Backend for slop-ai, an AI app builder. Every response is an envelope: " +
+        "`{ data }`, or `{ data: null, error }`.",
     )
     .setVersion("0.1.0")
     .build();

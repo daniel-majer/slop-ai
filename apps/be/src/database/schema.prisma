@@ -9,11 +9,3 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-// TODO(template): Replace sample model.
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}

@@ -6,7 +6,7 @@ if ! bun x commitlint --edit "$1"; then
   echo ""
   echo "  Examples:"
   echo "    feat(fe): add user profile page"
-  echo "    fix(be): handle empty response from /users"
+  echo "    fix(be): handle empty response from the cache"
   echo "    chore(fe): bump react to 19.3"
   echo "    docs(be): update API endpoints documentation"
   echo "    refactor(fe): extract auth token validation"

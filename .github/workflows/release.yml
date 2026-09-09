@@ -113,7 +113,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # TODO(template): Set repository URLs.
           # Add build args here for any new NEXT_PUBLIC_* variables.
           # NEXT_PUBLIC_* values are baked into browser code. Never put secrets here.
           build-args: |
@@ -195,7 +194,7 @@ jobs:
     # Add required reviewers and DEPLOY_HOOK_URL to the production environment.
     environment: production
     steps:
-      # TODO(template): set DEPLOY_HOOK_URL or replace this step for your host.
+      # Set the DEPLOY_HOOK_URL secret, or replace this step for your host.
       - name: Trigger the deploy hook
         env:
           DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}

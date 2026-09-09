@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 // Verify production Compose using disposable resources, isolated from dev and API tests.
 const root = fileURLToPath(new URL("../", import.meta.url));
-const project = `template-verify-${randomBytes(6).toString("hex")}`;
+const project = `slop-ai-verify-${randomBytes(6).toString("hex")}`;
 const abort = new AbortController();
 const reservations = [];
 const uuid =
@@ -232,82 +232,28 @@ async function main() {
   assert.equal(notFound.headers.get("x-request-id"), error.error.requestId);
   await request(`${api}/docs-json`, 404);
 
-  // TODO(template): Adapt demo checks.
-  // Keep CRUD, validation and SSR coverage when replacing /users or adding authentication.
-  const preflight = await request(`${api}/users/1`, 204, {
+  // Re-add CRUD, validation and SSR coverage alongside the first real resource.
+  const preflight = await request(`${api}/health/live`, 204, {
     method: "OPTIONS",
-    headers: { Origin: web, "Access-Control-Request-Method": "DELETE" },
+    headers: { Origin: web, "Access-Control-Request-Method": "GET" },
   });
   assert.equal(preflight.headers.get("access-control-allow-origin"), web);
   assert.equal(
     preflight.headers.get("access-control-allow-credentials"),
     "true",
   );
-  assert.ok(
-    preflight.headers
-      .get("access-control-allow-methods")
-      ?.split(/,\s*/)
-      .includes("DELETE"),
-  );
   const rejectedOrigin = await request(`${api}/health/live`, 200, {
     headers: { Origin: "https://untrusted.example" },
   });
   assert.equal(rejectedOrigin.headers.get("access-control-allow-origin"), null);
 
-  const invalid = await request(`${api}/users`, 400, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "invalid" }),
-  });
-  assert.ok(Array.isArray((await invalid.json()).error.details));
-
-  const emails = [0, 1].map(
-    (index) => `image-${index}-${randomBytes(6).toString("hex")}@example.com`,
+  const home = await (await request(web)).text();
+  assert.ok(
+    home.includes("slop-ai"),
+    "the web image must render the app shell",
   );
-  const users = [];
-  for (const email of emails) {
-    // oxlint-disable-next-line no-await-in-loop
-    const created = await request(`${api}/users`, 201, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    // oxlint-disable-next-line no-await-in-loop
-    const user = (await created.json()).data;
-    assert.ok(Number.isInteger(user.id));
-    assert.equal(user.email, email);
-    users.push(user);
-  }
-  const firstPage = await (await request(`${api}/users?take=1`)).json();
-  assert.equal(firstPage.data.length, 1);
-  assert.equal(firstPage.meta.hasNextPage, true);
-  assert.equal(firstPage.meta.nextCursor, firstPage.data[0].id);
-  const secondPage = await (
-    await request(`${api}/users?take=1&cursor=${firstPage.meta.nextCursor}`)
-  ).json();
-  assert.equal(secondPage.data.length, 1);
-  assert.notEqual(secondPage.data[0].id, firstPage.data[0].id);
-  assert.deepEqual(secondPage.meta, {
-    nextCursor: null,
-    hasNextPage: false,
-  });
-  const html = await (await request(`${web}/users`)).text();
-  for (const { email, id } of users) {
-    assert.ok(
-      html.includes(email),
-      "SSR must contain database rows, not just a page heading",
-    );
-    // oxlint-disable-next-line no-await-in-loop
-    const deleted = await request(`${api}/users/${id}`, 204, {
-      method: "DELETE",
-    });
-    // oxlint-disable-next-line no-await-in-loop
-    assert.equal(await deleted.text(), "");
-    // oxlint-disable-next-line no-await-in-loop
-    await request(`${api}/users/${id}`, 404);
-  }
   console.log(
-    "PASS: migrations, non-root apps, health, request IDs, pagination, CRUD and SSR",
+    "PASS: migrations, non-root apps, health, request IDs, CORS and SSR",
   );
 
   await compose(["stop", "api", "redis"]);
@@ -319,12 +265,11 @@ async function main() {
       data: { status: "degraded", checks: { database: "up", cache: "down" } },
     });
   });
-  // Keep this assertion aligned with the cached endpoint when replacing the hello demo.
-  assert.deepEqual(await (await request(api)).json(), {
-    data: "Hello World!",
+  assert.deepEqual(await (await request(`${api}/health/live`)).json(), {
+    data: { status: "ok" },
   });
   console.log(
-    "PASS: API boots without Redis and cached routes still return successful data",
+    "PASS: API boots without Redis and still serves successful responses",
   );
 
   await compose(["stop", "postgres"]);

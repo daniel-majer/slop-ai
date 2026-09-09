@@ -13,17 +13,11 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }),
 });
 
-// TODO(template): Replace sample data.
-const EMAILS = ["ada@example.com", "grace@example.com"];
-
 async function seed() {
-  await Promise.all(
-    EMAILS.map((email) =>
-      prisma.user.upsert({ where: { email }, update: {}, create: { email } }),
-    ),
-  );
+  // Add upserts here as the schema grows; keep them idempotent.
+  await prisma.$connect();
 
-  console.log(`seeded: ${EMAILS.join(", ")}`);
+  console.log("seeded: nothing to do yet");
 }
 
 seed()

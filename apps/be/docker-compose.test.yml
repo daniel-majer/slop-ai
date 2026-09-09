@@ -1,6 +1,5 @@
 # Disposable test stack with separate ports and no volumes.
-# TODO(template): rename this alongside the dev Compose project.
-name: turborepo-template-be-test
+name: slop-ai-be-test
 
 services:
   postgres:

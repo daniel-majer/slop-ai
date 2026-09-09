@@ -1,8 +1,6 @@
 # fe
 
-<!-- TODO(template): Update project introduction. -->
-
-Next.js frontend of the [turborepo-template](../../README.md) monorepo.
+Next.js frontend of the [slop-ai](../../README.md) monorepo.
 
 Run everything from the repo root — `turbo` orchestrates the dependency graph and
 caching, so running commands here directly skips both:
@@ -33,18 +31,18 @@ from the backend's OpenAPI spec and exports a hook per endpoint:
 
 ```tsx
 "use client";
-import { useUsersFindAll } from "@repo/api-client";
+import { useHealthReady } from "@repo/api-client";
 
-const { data } = useUsersFindAll();
-data?.data; // UserDto[] - the outer data is react-query's, the inner one the api envelope
+const { data } = useHealthReady();
+data?.data; // the outer data is react-query's, the inner one the api envelope
 ```
 
-`src/app/users/` is a full example: the server component prefetches into a
-`QueryClient` and hands it through `HydrationBoundary`, the client component
-reads the warm cache with the suspense hook, and mutations invalidate the list
-by its generated query key. Request bodies are validated against the zod schemas
-in `@repo/api-client/schemas`. The spec comes from the backend DTOs; runtime
-backend validation itself is performed by `class-validator`.
+For a route that reads a resource, let the server component prefetch into a
+`QueryClient` and hand it through `HydrationBoundary`, let the client component
+read the warm cache with the suspense hook, and let mutations invalidate the
+list by its generated query key. Request bodies are validated against the zod
+schemas in `@repo/api-client/schemas`. The spec comes from the backend DTOs;
+runtime backend validation itself is performed by `class-validator`.
 
 A page that calls the API cannot be prerendered - `export const dynamic =
 "force-dynamic"` - or `next build` fails on a connection refused with no
@@ -64,11 +62,11 @@ as `release.yml` build args, not container runtime variables.
 
 `NEXT_PUBLIC_API_URL` is always required. For the included routing, set it to
 the API origin: generated requests already carry `/api`. A shared-origin proxy
-can forward `/api/*` to the backend unchanged while `/users` stays a frontend
-page. `API_URL=http://api:3001` lets server-side calls use Compose networking.
+can forward `/api/*` to the backend unchanged while the frontend keeps its own
+routes. `API_URL=http://api:3001` lets server-side calls use Compose networking.
 
-Vitest covers env validation, the API transport and the users panel's form,
-mutations and cursor navigation. These component tests run without a browser.
+Vitest covers env validation and the API transport. Add component tests
+alongside the first real route; they run without a browser.
 
 ## Production image checks
 
@@ -79,9 +77,9 @@ bun run verify:images
 ```
 
 This builds the API, migration and frontend images and starts an isolated
-Compose stack. The checks exercise API CRUD, cursor pagination and confirm that
-`/users` contains server-rendered database rows. The runner prints container
-logs on failure and removes its disposable stack afterwards.
+Compose stack. The checks exercise health, CORS and server-rendered HTML. The
+runner prints container logs on failure and removes its disposable stack
+afterwards.
 
 These HTTP checks do not execute client-side JavaScript or test hydration and
 browser interactions. The template does not prescribe a browser-testing tool;
