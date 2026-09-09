@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+  # Release reuses CI to avoid duplicate runs on main.
+  workflow_call:
+
+# CI runs checks directly; disable hooks.
+env:
+  HUSKY: 0
+  # Test placeholders for CI prerendering; production URLs belong in release.yml variables.
+  NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+  NEXT_PUBLIC_API_URL: "http://localhost:3001"
+  # Optional remote cache; without these values, the local Actions cache still works.
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  # Check affected packages on PRs; releases check everything.
+  TURBO_AFFECTED: ${{ github.event_name == 'pull_request' && '--affected' || '' }}
+  TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+
+# Cancel superseded runs, except on main.
+concurrency:
+  group: ci-${{ github.ref }}
+  # Adjust this exception if the default branch is renamed.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, types, build, spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - name: Audit dependencies
+        run: bun run audit
+
+      - run: bun x turbo run quality check-types $TURBO_AFFECTED
+      # Keep typegen and build sequential: both write to .next.
+      - run: bun x turbo run build $TURBO_AFFECTED
+        env:
+          # No deployment environment is available during CI builds.
+          SKIP_ENV_VALIDATION: "true"
+      - run: bun x turbo boundaries
+
+      # Detect uncommitted API contract changes.
+      - name: Check the api spec is up to date
+        run: |
+          bun run --cwd apps/be api:spec
+          if ! git diff --quiet -- apps/be/openapi.json; then
+            echo "::error file=apps/be/openapi.json::openapi.json is out of date - run 'bun run api:sync' and commit the result"
+            git diff -- apps/be/openapi.json
+            exit 1
+          fi
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      - run: bun x turbo run test $TURBO_AFFECTED
+      - run: bun run test:release
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+
+      # test:e2e starts its own disposable Postgres and Redis.
+      - run: bun x turbo run test:e2e $TURBO_AFFECTED
+
+  production-smoke:
+    name: Production image smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Verify production images and migrations in an isolated Compose stack.
+      - run: bun run verify:images

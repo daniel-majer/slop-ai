@@ -1,0 +1,57 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  // Hash the committed spec because generated clients are gitignored.
+  "globalDependencies": ["apps/be/openapi.json"],
+  "tasks": {
+    "db:generate": {
+      "outputs": []
+    },
+    "generate": {
+      "outputs": ["src/generated/**"]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "build": {
+      "dependsOn": ["^build", "^generate"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      // Add new build-time server variables here; NEXT_PUBLIC_* is inferred.
+      "env": ["NODE_ENV", "API_URL"],
+      // Validation-only flag; it does not affect build output.
+      "passThroughEnv": ["SKIP_ENV_VALIDATION"]
+    },
+    "check-types": {
+      "dependsOn": ["transit", "^generate"],
+      "outputs": ["tsconfig.tsbuildinfo"]
+    },
+    "test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "//#quality": {
+      "dependsOn": ["//#lint", "//#format"]
+    },
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix"],
+      "cache": false
+    },
+    "//#lint": {},
+    "//#lint:fix": {
+      "cache": false
+    },
+    "//#format": {},
+    "//#format:fix": {
+      "dependsOn": ["//#lint:fix"],
+      "cache": false
+    }
+  }
+}

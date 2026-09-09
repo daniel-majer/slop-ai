@@ -1,0 +1,211 @@
+name: Release
+
+# Publish a matching image set, then optionally trigger a deploy hook.
+
+on:
+  push:
+    # Adjust these refs if your release branching or tag convention changes.
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Serialize publication across all refs sharing image aliases.
+concurrency:
+  group: release-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Pin actions to immutable commits; Renovate updates them.
+
+env:
+  # For ARM hosts, add linux/arm64 and enable the QEMU step below.
+  PLATFORMS: linux/amd64
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  images:
+    name: Build ${{ matrix.app }}
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # When adding images, also update promotion aliases and both scripts/*-images.mjs lists.
+        include:
+          - app: be
+            file: apps/be/Dockerfile
+            target: runtime
+          - app: fe
+            file: apps/fe/Dockerfile
+            target: runtime
+          - app: migrate
+            file: apps/be/Dockerfile
+            target: migrate
+    steps:
+      # Fail before any Docker work when the frontend's public URLs are missing.
+      - name: Check frontend build variables
+        if: matrix.app == 'fe'
+        env:
+          NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+        run: |
+          status=0
+          for name in NEXT_PUBLIC_APP_URL NEXT_PUBLIC_API_URL; do
+            case "${!name}" in
+              http://?* | https://?*) ;;
+              "")
+                echo "::error::Repository variable $name is not set."
+                status=1 ;;
+              *)
+                echo "::error::Repository variable $name must be an absolute HTTP(S) URL, got '${!name}'."
+                status=1 ;;
+            esac
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "Set the variables under Settings > Secrets and variables > Actions > Variables," \
+              "or run: gh variable set NAME --body https://..."
+          fi
+          exit "$status"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # - name: Enable emulation for foreign architectures
+      #   uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to the registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive candidate metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.app }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.app }}
+
+      - name: Build and push candidate
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          # Dockerfiles need the repository root as their build context.
+          context: .
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # TODO(template): Set repository URLs.
+          # Add build args here for any new NEXT_PUBLIC_* variables.
+          # NEXT_PUBLIC_* values are baked into browser code. Never put secrets here.
+          build-args: |
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+          # Keep build caches separate per app.
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Record image digest
+        env:
+          APP: ${{ matrix.app }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p image-digests
+          printf '%s\n' "$DIGEST" > "image-digests/$APP.txt"
+
+      # Stable artifact names preserve successful builds when rerunning failed jobs.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-digest-${{ matrix.app }}
+          path: image-digests/${{ matrix.app }}.txt
+          if-no-files-found: error
+          overwrite: true
+
+  promote:
+    name: Promote complete image set
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.promote.outputs.image-tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: image-digest-*
+          path: image-digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive release aliases
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          # Keep aliases aligned with the image matrix above.
+          images: |
+            ghcr.io/${{ github.repository }}/be
+            ghcr.io/${{ github.repository }}/fe
+            ghcr.io/${{ github.repository }}/migrate
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=long
+
+      - name: Promote verified digests
+        id: promote
+        env:
+          IMAGE_METADATA: ${{ steps.meta.outputs.json }}
+        run: node scripts/promote-images.mjs
+
+  deploy:
+    name: Deploy
+    needs: promote
+    runs-on: ubuntu-latest
+    # Add required reviewers and DEPLOY_HOOK_URL to the production environment.
+    environment: production
+    steps:
+      # TODO(template): set DEPLOY_HOOK_URL or replace this step for your host.
+      - name: Trigger the deploy hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+          IMAGE_TAG: ${{ needs.promote.outputs.image-tag }}
+        run: |
+          echo "Deploy IMAGE_TAG=$IMAGE_TAG with docker-compose.prod.yml." >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "No DEPLOY_HOOK_URL secret is set, so nothing was deployed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          payload=$(jq -n --arg imageTag "$IMAGE_TAG" --arg revision "$GITHUB_SHA" '{imageTag: $imageTag, revision: $revision}')
+          curl --fail --silent --show-error --request POST \
+            --header 'Content-Type: application/json' --data "$payload" "$DEPLOY_HOOK_URL"

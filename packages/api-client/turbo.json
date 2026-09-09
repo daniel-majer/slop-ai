@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "generate": {
+      // The root globalDependencies already hashes the API spec.
+      "inputs": ["orval.config.ts", "src/fetcher.ts", "package.json"],
+      "outputs": ["src/generated/**"]
+    },
+    "check-types": {
+      "dependsOn": ["generate"],
+      "outputs": []
+    }
+  }
+}

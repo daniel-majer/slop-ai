@@ -1,0 +1,99 @@
+import { Controller, Get } from "@nestjs/common";
+
+import { ApiDataResponse } from "../src/common/api-data-response.decorator.js";
+import { envelope } from "../src/common/transform-response.interceptor.js";
+import { useTestApp } from "./setup.js";
+
+@Controller("shapes")
+class ShapesController {
+  @Get("object")
+  @ApiDataResponse({ type: "object" })
+  object() {
+    return { id: 1, name: "Anna" };
+  }
+
+  @Get("nothing")
+  @ApiDataResponse({ type: "object" }, { nullable: true })
+  nothing() {
+    return undefined;
+  }
+
+  @Get("false")
+  @ApiDataResponse({ type: "boolean" })
+  falsy() {
+    return false;
+  }
+
+  @Get("paginated")
+  @ApiDataResponse({ type: "integer" }, { isArray: true, meta: true })
+  paginated() {
+    return envelope([1, 2, 3], { pages: 10 });
+  }
+
+  // Payload fields named data/meta must not bypass wrapping.
+  @Get("lookalike")
+  @ApiDataResponse({ type: "object" })
+  lookalike() {
+    return { data: "column", meta: "column" };
+  }
+}
+
+describe("TransformResponseInterceptor (e2e)", () => {
+  const t = useTestApp({ controllers: [ShapesController] });
+
+  it("wraps a plain value in a data envelope", async () => {
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/object",
+    });
+
+    expect(res.json()).toEqual({ data: { id: 1, name: "Anna" } });
+  });
+
+  it("returns data: null when the handler returns nothing", async () => {
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/nothing",
+    });
+
+    expect(res.json()).toEqual({ data: null });
+  });
+
+  it("preserves falsy values instead of swallowing them", async () => {
+    const res = await t.app.inject({ method: "GET", url: "/api/shapes/false" });
+
+    expect(res.json()).toEqual({ data: false });
+  });
+
+  it("passes an envelope() response through unchanged", async () => {
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/paginated",
+    });
+
+    expect(res.json()).toEqual({ data: [1, 2, 3], meta: { pages: 10 } });
+  });
+
+  it("wraps a value that only looks like an envelope", async () => {
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/shapes/lookalike",
+    });
+
+    expect(res.json()).toEqual({
+      data: { data: "column", meta: "column" },
+    });
+  });
+
+  it("leaves the exception filter's envelope alone", async () => {
+    const res = await t.app.inject({
+      method: "GET",
+      url: "/api/does-not-exist",
+    });
+    const body = res.json();
+
+    expect(res.statusCode).toBe(404);
+    expect(body.data).toBeNull();
+    expect(body.error.statusCode).toBe(404);
+  });
+});

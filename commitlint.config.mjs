@@ -1,0 +1,26 @@
+/** @type {import("@commitlint/types").UserConfig} */
+export default {
+  extends: ["@commitlint/config-conventional"],
+  rules: {
+    "scope-empty": [2, "never"],
+    // When adding or renaming scopes, also update the help in .husky/commit-msg.
+    "scope-enum": [
+      2,
+      "always",
+      [
+        "fe",
+        "be",
+        "api-client",
+        "ui",
+        "ts-config",
+        "tooling",
+        "deps",
+        "deps-dev",
+      ],
+    ],
+    "scope-case": [2, "always", "lower-case"],
+    "subject-empty": [2, "never"],
+    "type-empty": [2, "never"],
+  },
+  ignores: [(commit) => commit.startsWith("Merge ")],
+};

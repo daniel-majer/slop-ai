@@ -1,0 +1,32 @@
+# Disposable test stack with separate ports and no volumes.
+# TODO(template): rename this alongside the dev Compose project.
+name: turborepo-template-be-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      # Keep credentials, ports and the Postgres healthcheck aligned with .env.test.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      # Hardcoded to avoid interpolation from the dev .env.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "NestJS",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "noEmit": false,
+    "sourceMap": true,
+    "removeComments": true,
+    "incremental": true,
+
+    "isolatedModules": false,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true
+  }
+}

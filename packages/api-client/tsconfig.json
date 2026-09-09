@@ -1,0 +1,9 @@
+{
+  "extends": "@repo/ts-config/react-library.json",
+  "compilerOptions": {
+    // Bundler resolution keeps Orval imports compatible with Turbopack.
+    "noEmit": true
+  },
+  "include": ["src", "orval.config.ts"],
+  "exclude": ["node_modules"]
+}

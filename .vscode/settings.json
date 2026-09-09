@@ -1,0 +1,17 @@
+{
+  // Use Oxc formatting only in this workspace.
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
+
+  // Use Oxc fixes on save, not ESLint.
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit",
+    "source.fixAll.eslint": "never"
+  },
+
+  // TS 7 uses the native-preview extension, not typescript.tsdk.
+
+  "oxc.enable.oxlint": true,
+  "oxc.enable.oxfmt": true,
+  "oxc.lint.run": "onType"
+}
